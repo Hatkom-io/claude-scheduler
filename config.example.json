@@ -1,0 +1,11 @@
+{
+  "repos": [
+    { "repo": "owner/repo1", "path": "/path/to/local/repo1" },
+    "owner/repo2"
+  ],
+  "intervalMinutes": 30,
+  "workingHours": { "start": 9, "end": 19 },
+  "workingDays": [1, 2, 3, 4, 5],
+  "label": "ready for review",
+  "reviewedLabel": "claude-reviewed"
+}

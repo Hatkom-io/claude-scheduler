@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runReviewCycle } from './reviewer.ts'
+import { log, type Config } from './utils.ts'
 
 const lockfilePath = resolve(import.meta.dirname, 'daemon.pid')
 
@@ -47,17 +48,15 @@ process.on('SIGTERM', () => {
 
 process.on('exit', releaseLock)
 
-const config = {
-  intervalMinutes: 30,
-  workingHours: { start: 9, end: 19 },
-  workingDays: [1, 2, 3, 4, 5],
-  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+const configPath = resolve(import.meta.dirname, 'config.json')
+let config: Config
+try {
+  config = JSON.parse(readFileSync(configPath, 'utf-8'))
+} catch (error) {
+  console.error(`Failed to read config.json: ${(error as Error).message}. Copy config.example.json to config.json and edit it.`)
+  process.exit(1)
 }
-
-const log = (message: string) => {
-  const timestamp = new Date().toISOString()
-  console.log(`[${timestamp}] ${message}`)
-}
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const isWorkingTime = () => {
   const now = new Date()
@@ -115,7 +114,7 @@ const getNextCheckDelay = () => {
 const scheduleNext = async () => {
   if (isWorkingTime()) {
     try {
-      await runReviewCycle()
+      await runReviewCycle(config)
     } catch (error) {
       log(`Review cycle error: ${(error as Error).message}`)
     }
@@ -136,10 +135,11 @@ if (!acquireLock()) {
 }
 
 log('Review bot starting')
+log(`Repos: ${config.repos.map((r: any) => typeof r === 'string' ? r : r.repo).join(', ')}`)
 log(
   `Config: every ${config.intervalMinutes}min, ${config.workingHours.start}:00-${config.workingHours.end}:00, Mon-Fri`,
 )
-log(`Timezone: ${config.timezone}`)
+log(`Timezone: ${timezone}`)
 log(`Working time now: ${isWorkingTime()}`)
 
 scheduleNext()
