@@ -32,16 +32,18 @@ export const loadPrompt = (commandFile: string) => {
     .trim()
 }
 
-export const getPRs = (triggerLabel: string, doneLabel: string): PullRequest[] => {
+export const getPRs = (triggerLabel: string | null, doneLabel: string | string[]): PullRequest[] => {
   try {
+    const labelFilter = triggerLabel ? ` --label "${triggerLabel}"` : ''
     const json = exec(
-      `gh pr list --label "${triggerLabel}" --json number,labels,title`,
+      `gh pr list${labelFilter} --json number,labels,title`,
     )
     const prs: PullRequest[] = JSON.parse(json)
+    const doneLabels = Array.isArray(doneLabel) ? doneLabel : [doneLabel]
 
     return prs.filter((pr) => {
       const labels = pr.labels.map((label) => label.name)
-      return !labels.includes(doneLabel)
+      return !doneLabels.some((dl) => labels.includes(dl))
     })
   } catch (error) {
     console.error(`Failed to fetch PRs: ${(error as Error).message}`)
