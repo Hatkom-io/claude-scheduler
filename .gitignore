@@ -1,3 +1,4 @@
 logs/
 daemon.pid
 start-daemon.bat
+node_modules/

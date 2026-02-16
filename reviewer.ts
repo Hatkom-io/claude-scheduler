@@ -75,9 +75,13 @@ const reviewPR = (prNumber: number): Promise<string> => {
 
     log(`Spawning: claude ${args.slice(0, 3).join(' ')} ... (PR #${prNumber})`)
 
+    const env = { ...process.env }
+    delete env.CLAUDECODE
+
     const child = spawn('claude', args, {
       cwd: repoRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
+      env,
     })
 
     let stdout = ''

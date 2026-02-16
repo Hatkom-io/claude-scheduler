@@ -4,11 +4,24 @@ Automated PR reviewer. Runs as a background daemon during working hours, picks u
 
 ## How it works
 
+### Review cycle
 1. Every 30 minutes (during 9:00–19:00 Mon–Fri, local time), the daemon checks for open PRs with the `ready for review` label
 2. PRs that already have the `claude-reviewed` label are skipped
 3. For each eligible PR, it spawns `claude --print` with the `pr-review` prompt
 4. The review command posts inline comments on GitHub and adds the `claude-reviewed` label when done
 5. Outside working hours, the daemon sleeps until the next workday morning
+
+### Fix cycle
+15 minutes after each review cycle, the daemon runs a fix cycle:
+
+1. Finds open PRs with the `claude-reviewed` label (PRs with `locked` label are skipped)
+2. For each PR, fetches unresolved review comments (those without a bot reply)
+3. If no unresolved comments — skips the PR
+4. Spawns Claude in agentic mode (no `--print`) to checkout the branch, classify each comment, apply fixes, commit, and push
+5. Replies on each comment: "✅ Fixed" or "❌ Could not fix automatically"
+6. Keeps monitoring every cycle — new comments on reviewed PRs get fixed automatically
+
+**To prevent fixes:** Add the `locked` label to the PR.
 
 ## Prerequisites
 
@@ -75,7 +88,8 @@ bun review-bot/daemon.ts
 | File           | Purpose                                          |
 | -------------- | ------------------------------------------------ |
 | `daemon.ts`    | Scheduler — interval timer with working-hours gate |
-| `reviewer.ts`  | Core — fetches PRs via `gh`, spawns `claude` CLI |
+| `reviewer.ts`  | Review cycle — fetches PRs via `gh`, spawns `claude --print` |
+| `fixer.ts`     | Fix cycle — fixes review comments via `claude` in agentic mode |
 | `install.ts`   | Registers OS-level autostart service             |
 | `tsconfig.json`| Type checking config                             |
 | `logs/`        | Created at install — stdout/stderr logs          |

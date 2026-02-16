@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runReviewCycle } from './reviewer.ts'
+import { runFixCycle } from './fixer.ts'
 
 const lockfilePath = resolve(import.meta.dirname, 'daemon.pid')
 
@@ -112,6 +113,8 @@ const getNextCheckDelay = () => {
   return nextStart.getTime() - now.getTime()
 }
 
+const fixCycleOffsetMs = 15 * 60 * 1000
+
 const scheduleNext = async () => {
   if (isWorkingTime()) {
     try {
@@ -119,6 +122,16 @@ const scheduleNext = async () => {
     } catch (error) {
       log(`Review cycle error: ${(error as Error).message}`)
     }
+
+    // Schedule fix cycle 15 minutes after review cycle to avoid concurrency
+    setTimeout(async () => {
+      if (!isWorkingTime()) return
+      try {
+        await runFixCycle()
+      } catch (error) {
+        log(`Fix cycle error: ${(error as Error).message}`)
+      }
+    }, fixCycleOffsetMs)
   }
 
   const delay = getNextCheckDelay()
@@ -135,7 +148,7 @@ if (!acquireLock()) {
   process.exit(1)
 }
 
-log('Review bot starting')
+log('Review bot + fix bot starting')
 log(
   `Config: every ${config.intervalMinutes}min, ${config.workingHours.start}:00-${config.workingHours.end}:00, Mon-Fri`,
 )
