@@ -1,11 +1,11 @@
-# Review Bot
+# Claude Scheduler
 
-Automated PR reviewer. Runs as a background daemon during working hours, picks up PRs labeled `ready for review`, and runs the Claude Code `pr-review` command against each one.
+Automated PR reviewer and fixer. Runs as a background daemon during working hours, reviews PRs with Claude Code CLI, posts inline comments, and automatically fixes them.
 
 ## How it works
 
 ### Review cycle
-1. Every 30 minutes (during 9:00–19:00 Mon–Fri, local time), the daemon checks for open PRs with the `ready for review` label
+1. Every 30 minutes (during 9:00-19:00 Mon-Fri, local time), the daemon checks for open PRs with the `ready for review` label
 2. PRs that already have the `claude-reviewed` label are skipped
 3. For each eligible PR, it spawns `claude --print` with the `pr-review` prompt
 4. The review command posts inline comments on GitHub and adds the `claude-reviewed` label when done
@@ -18,10 +18,20 @@ Automated PR reviewer. Runs as a background daemon during working hours, picks u
 2. For each PR, fetches unresolved review comments (those without a bot reply)
 3. If no unresolved comments — skips the PR
 4. Spawns Claude in agentic mode (no `--print`) to checkout the branch, classify each comment, apply fixes, commit, and push
-5. Replies on each comment: "✅ Fixed" or "❌ Could not fix automatically"
+5. Replies on each comment: "Fixed" or "Could not fix automatically"
 6. Keeps monitoring every cycle — new comments on reviewed PRs get fixed automatically
 
 **To prevent fixes:** Add the `locked` label to the PR.
+
+## Labels
+
+| Label | Purpose |
+| --- | --- |
+| `ready for review` | Triggers the review cycle |
+| `claude-reviewed` | Added after review; fixer monitors these PRs |
+| `locked` | Blocks auto-fix for a PR |
+
+> **Quick start:** See [INSTRUCTION.md](INSTRUCTION.md) for a step-by-step setup guide.
 
 ## Prerequisites
 
@@ -29,10 +39,10 @@ Automated PR reviewer. Runs as a background daemon during working hours, picks u
 - [GitHub CLI](https://cli.github.com) authenticated (`gh auth login`)
 - [Claude Code CLI](https://claude.ai/claude-code) authenticated
 
-## Install
+## Install as background service
 
 ```bash
-bun review-bot/install.ts
+bun install.ts
 ```
 
 This registers a background service that auto-starts on login:
@@ -48,7 +58,7 @@ The daemon starts immediately after install.
 ## Uninstall
 
 ```bash
-bun review-bot/install.ts --uninstall
+bun install.ts --uninstall
 ```
 
 ## Check if running
@@ -74,14 +84,37 @@ schtasks /query /tn "SFS-ReviewBot"
 **Any OS — check the logs:**
 
 ```bash
-tail -f review-bot/logs/stdout.log
+tail -f logs/stdout.log
 ```
 
-## Run manually (without installing)
+## Run manually
+
+### Daemon mode (continuous, working-hours only)
 
 ```bash
-bun review-bot/daemon.ts
+bun daemon.ts
 ```
+
+### One-shot against any repo
+
+```bash
+bun run.ts <owner/repo> <local-path> [review|fix|all]
+```
+
+Examples:
+
+```bash
+# Full cycle: review + fix
+bun run.ts owner/repo ~/projects/repo
+
+# Only review
+bun run.ts owner/repo ~/projects/repo review
+
+# Only fix
+bun run.ts owner/repo ~/projects/repo fix
+```
+
+If the local path doesn't exist, the repo will be cloned automatically.
 
 ## Files
 
@@ -90,6 +123,7 @@ bun review-bot/daemon.ts
 | `daemon.ts`    | Scheduler — interval timer with working-hours gate |
 | `reviewer.ts`  | Review cycle — fetches PRs via `gh`, spawns `claude --print` |
 | `fixer.ts`     | Fix cycle — fixes review comments via `claude` in agentic mode |
+| `run.ts`       | CLI runner — one-shot review/fix against any repo |
 | `install.ts`   | Registers OS-level autostart service             |
 | `tsconfig.json`| Type checking config                             |
 | `logs/`        | Created at install — stdout/stderr logs          |
@@ -111,16 +145,15 @@ const config = {
 After changing config, restart the daemon:
 
 ```bash
-bun review-bot/install.ts --uninstall && bun review-bot/install.ts
+bun install.ts --uninstall && bun install.ts
 ```
 
 ## Custom repo path
 
-By default the bot assumes it lives inside the monorepo (`review-bot/` at repo root). To point it at a different clone:
+By default the daemon operates on whichever repo it lives inside. To point it at a different repo:
 
 ```bash
-REVIEW_BOT_REPO_PATH=/path/to/sfs-monorepo bun review-bot/install.ts
+REVIEW_BOT_REPO_PATH=/path/to/repo bun install.ts
 ```
 
 The env var is baked into the service definition, so it persists across restarts.
-# claude-scheduler

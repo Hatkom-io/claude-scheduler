@@ -1,6 +1,13 @@
 {
   "name": "claude-scheduler",
   "private": true,
+  "scripts": {
+    "start": "bun daemon.ts",
+    "run": "bun run.ts",
+    "install-service": "bun install.ts",
+    "uninstall-service": "bun install.ts --uninstall",
+    "typecheck": "tsc --noEmit"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
