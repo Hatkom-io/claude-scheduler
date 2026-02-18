@@ -20,7 +20,7 @@ export const runFixCycle = async () => {
     const promptTemplate = loadPrompt('pr-fix.md')
 
     log('Starting fix cycle')
-    const prs = getPRs(null, ['claude-fixed', 'claude fixed'])
+    const prs = getPRs(null, ['claude-fixed', 'claude fixed', 'Ready for approval', 'approved'])
 
     if (prs.length === 0) {
       log('No PRs pending fixes')
