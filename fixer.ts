@@ -1,4 +1,5 @@
-import { loadPrompt, getPRs, spawnClaude, exec, createWorktree, removeWorktree } from './runner.ts'
+import { loadConfig, loadPrompt, getPRs, spawnClaude, exec, createWorktree, removeWorktree } from './runner.ts'
+import type { RepoConfig } from './runner.ts'
 
 const log = (msg: string) => {
   console.log(`[${new Date().toISOString()}] [fixer] ${msg}`)
@@ -7,6 +8,54 @@ const log = (msg: string) => {
 const timeoutMs = 20 * 60 * 1000
 
 let running = false
+
+const fixRepo = async (repo: RepoConfig) => {
+  let promptTemplate: string
+  try {
+    promptTemplate = loadPrompt('pr-fix.md', repo.path)
+  } catch (error) {
+    log(`[${repo.url}] Skipping — prompt not found: ${(error as Error).message}`)
+    return
+  }
+
+  const prs = getPRs(null, ['claude-fixed', 'claude fixed', 'Ready for approval', 'approved'], repo)
+
+  if (prs.length === 0) {
+    log(`[${repo.url}] No PRs pending fixes`)
+    return
+  }
+
+  log(
+    `[${repo.url}] Found ${prs.length} PR(s) to fix: ${prs.map((pr) => `#${pr.number} "${pr.title}"`).join(', ')}`,
+  )
+
+  for (const pr of prs) {
+    let worktreePath: string | undefined
+
+    try {
+      const branch = exec(
+        `gh pr view ${pr.number} --repo "${repo.url}" --json headRefName --jq '.headRefName'`,
+        repo.path,
+      )
+      worktreePath = createWorktree(pr.number, branch, repo.path)
+
+      log(`[${repo.url}] Fixing PR #${pr.number}: ${pr.title} (branch: ${branch})`)
+      const prompt = promptTemplate.replaceAll('$ARGUMENTS', String(pr.number))
+      const output = await spawnClaude({
+        prompt,
+        cwd: worktreePath,
+        prNumber: pr.number,
+        timeoutMs,
+        label: 'fixer',
+      })
+      log(`[${repo.url}] PR #${pr.number} fix complete:\n${output.slice(0, 500)}`)
+    } catch (error) {
+      log(`[${repo.url}] PR #${pr.number} fix failed: ${(error as Error).message}`)
+    } finally {
+      if (worktreePath) removeWorktree(worktreePath, repo.path)
+    }
+  }
+}
 
 export const runFixCycle = async () => {
   if (running) {
@@ -17,43 +66,14 @@ export const runFixCycle = async () => {
   running = true
 
   try {
-    const promptTemplate = loadPrompt('pr-fix.md')
-
     log('Starting fix cycle')
-    const prs = getPRs(null, ['claude-fixed', 'claude fixed', 'Ready for approval', 'approved'])
+    const config = loadConfig()
 
-    if (prs.length === 0) {
-      log('No PRs pending fixes')
-      return
-    }
-
-    log(
-      `Found ${prs.length} PR(s) to fix: ${prs.map((pr) => `#${pr.number} "${pr.title}"`).join(', ')}`,
-    )
-
-    for (const pr of prs) {
-      let worktreePath: string | undefined
-
+    for (const repo of config.repos) {
       try {
-        const branch = exec(
-          `gh pr view ${pr.number} --json headRefName --jq '.headRefName'`,
-        )
-        worktreePath = createWorktree(pr.number, branch)
-
-        log(`Fixing PR #${pr.number}: ${pr.title} (branch: ${branch})`)
-        const prompt = promptTemplate.replaceAll('$ARGUMENTS', String(pr.number))
-        const output = await spawnClaude({
-          prompt,
-          cwd: worktreePath,
-          prNumber: pr.number,
-          timeoutMs,
-          label: 'fixer',
-        })
-        log(`PR #${pr.number} fix complete:\n${output.slice(0, 500)}`)
+        await fixRepo(repo)
       } catch (error) {
-        log(`PR #${pr.number} fix failed: ${(error as Error).message}`)
-      } finally {
-        if (worktreePath) removeWorktree(worktreePath)
+        log(`[${repo.url}] Unexpected error: ${(error as Error).message}`)
       }
     }
 

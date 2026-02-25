@@ -1,0 +1,15 @@
+{
+  "name": "claude-scheduler",
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "scripts": {
+    "start": "bun daemon.ts",
+    "install:service": "bun install.ts",
+    "uninstall:service": "bun install.ts --uninstall",
+    "logs": "tail -f logs/stdout.log",
+    "logs:err": "tail -f logs/stderr.log"
+  }
+}

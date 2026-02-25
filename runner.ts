@@ -3,18 +3,67 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-const resolveRepoRoot = () => {
-  if (process.env.REVIEW_BOT_REPO_PATH) {
-    return resolve(process.env.REVIEW_BOT_REPO_PATH)
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+export type RepoConfig = {
+  url: string
+  path: string
+}
+
+export type Config = {
+  repos: RepoConfig[]
+}
+
+const configPath = resolve(import.meta.dirname, 'config.json')
+
+export const loadConfig = (): Config => {
+  if (!existsSync(configPath)) {
+    throw new Error(
+      `config.json not found at ${configPath}\n` +
+      `Copy config.example.json to config.json and fill in your repositories.`,
+    )
   }
-  return resolve(import.meta.dirname, '..')
+
+  let raw: string
+  try {
+    raw = readFileSync(configPath, 'utf-8')
+  } catch (error) {
+    throw new Error(`Failed to read config.json: ${(error as Error).message}`)
+  }
+
+  let config: Config
+  try {
+    config = JSON.parse(raw) as Config
+  } catch (error) {
+    throw new Error(`config.json is not valid JSON: ${(error as Error).message}`)
+  }
+
+  if (!Array.isArray(config.repos) || config.repos.length === 0) {
+    throw new Error('config.json must contain a non-empty "repos" array')
+  }
+
+  for (const repo of config.repos) {
+    if (!repo.url || typeof repo.url !== 'string') {
+      throw new Error(`Each repo in config.json must have a "url" field (e.g. "owner/repo")`)
+    }
+    if (!repo.path || typeof repo.path !== 'string') {
+      throw new Error(`Each repo in config.json must have a "path" field (absolute path)`)
+    }
+    if (!existsSync(repo.path)) {
+      throw new Error(`Repo path does not exist: ${repo.path} (for ${repo.url})`)
+    }
+  }
+
+  return config
 }
 
-export const repoRoot = resolveRepoRoot()
+// ─── Shell ───────────────────────────────────────────────────────────────────
 
-export const exec = (command: string, cwd?: string) => {
-  return execSync(command, { cwd: cwd ?? repoRoot, encoding: 'utf-8' }).trim()
+export const exec = (command: string, cwd: string) => {
+  return execSync(command, { cwd, encoding: 'utf-8' }).trim()
 }
+
+// ─── Pull Requests ───────────────────────────────────────────────────────────
 
 export type PullRequest = {
   number: number
@@ -22,21 +71,16 @@ export type PullRequest = {
   labels: Array<{ name: string }>
 }
 
-export const loadPrompt = (commandFile: string) => {
-  const path = resolve(repoRoot, '.claude/commands', commandFile)
-  if (!existsSync(path)) {
-    throw new Error(`${path} not found`)
-  }
-  return readFileSync(path, 'utf-8')
-    .replace(/^---[\s\S]*?---\n*/m, '')
-    .trim()
-}
-
-export const getPRs = (triggerLabel: string | null, doneLabel: string | string[]): PullRequest[] => {
+export const getPRs = (
+  triggerLabel: string | null,
+  doneLabel: string | string[],
+  repo: RepoConfig,
+): PullRequest[] => {
   try {
     const labelFilter = triggerLabel ? ` --label "${triggerLabel}"` : ''
     const json = exec(
-      `gh pr list${labelFilter} --json number,labels,title`,
+      `gh pr list --repo "${repo.url}"${labelFilter} --json number,labels,title`,
+      repo.path,
     )
     const prs: PullRequest[] = JSON.parse(json)
     const doneLabels = Array.isArray(doneLabel) ? doneLabel : [doneLabel]
@@ -46,10 +90,24 @@ export const getPRs = (triggerLabel: string | null, doneLabel: string | string[]
       return !doneLabels.some((dl) => labels.includes(dl))
     })
   } catch (error) {
-    console.error(`Failed to fetch PRs: ${(error as Error).message}`)
+    console.error(`Failed to fetch PRs for ${repo.url}: ${(error as Error).message}`)
     return []
   }
 }
+
+// ─── Prompts ─────────────────────────────────────────────────────────────────
+
+export const loadPrompt = (commandFile: string, repoPath: string) => {
+  const path = resolve(repoPath, '.claude/commands', commandFile)
+  if (!existsSync(path)) {
+    throw new Error(`Prompt not found: ${path}`)
+  }
+  return readFileSync(path, 'utf-8')
+    .replace(/^---[\s\S]*?---\n*/m, '')
+    .trim()
+}
+
+// ─── Claude ──────────────────────────────────────────────────────────────────
 
 const killGraceMs = 10 * 1000
 
@@ -106,7 +164,7 @@ export const spawnClaude = (opts: {
       stderr += data.toString()
     })
 
-    child.on('close', (code) => {
+    child.on('close', (code: number | null) => {
       clearTimeout(killTimer)
 
       if (killed) {
@@ -125,22 +183,24 @@ export const spawnClaude = (opts: {
   })
 }
 
-export const createWorktree = (prNumber: number, branch: string): string => {
+// ─── Git Worktrees ───────────────────────────────────────────────────────────
+
+export const createWorktree = (prNumber: number, branch: string, repoPath: string): string => {
   const worktreePath = join(tmpdir(), `review-bot-fix-${prNumber}-${Date.now()}`)
 
-  exec(`git fetch origin ${branch}`)
-  exec(`git worktree add ${worktreePath} origin/${branch}`)
+  exec(`git fetch origin ${branch}`, repoPath)
+  exec(`git worktree add ${worktreePath} origin/${branch}`, repoPath)
 
   return worktreePath
 }
 
-export const removeWorktree = (worktreePath: string) => {
+export const removeWorktree = (worktreePath: string, repoPath: string) => {
   try {
-    exec(`git worktree remove ${worktreePath} --force`)
+    exec(`git worktree remove ${worktreePath} --force`, repoPath)
   } catch {
     try {
       rmSync(worktreePath, { recursive: true, force: true })
-      exec('git worktree prune')
+      exec('git worktree prune', repoPath)
     } catch { /* best effort */ }
   }
 }
