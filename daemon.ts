@@ -2,6 +2,7 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runReviewCycle } from './reviewer.ts'
 import { runFixCycle } from './fixer.ts'
+import { runStagingCycle } from './staging-merger.ts'
 
 const lockfilePath = resolve(import.meta.dirname, 'daemon.pid')
 
@@ -125,6 +126,12 @@ const scheduleNext = async () => {
       await runFixCycle()
     } catch (error) {
       log(`Fix cycle error: ${(error as Error).message}`)
+    }
+
+    try {
+      await runStagingCycle()
+    } catch (error) {
+      log(`Staging cycle error: ${(error as Error).message}`)
     }
   }
 

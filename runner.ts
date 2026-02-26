@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os'
 export type RepoConfig = {
   url: string
   path: string
+  stagingBranch?: string
+  stagingLabel?: string
 }
 
 export type Config = {
