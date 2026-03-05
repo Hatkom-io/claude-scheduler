@@ -1,13 +1,14 @@
 # claude-scheduler
 
-Automated PR reviewer and fixer. Runs as a background daemon during working hours, picks up PRs across multiple repositories, reviews them with Claude, and fixes unresolved review comments.
+Automated PR reviewer, fixer, and unit test writer. Runs as a background daemon during working hours, picks up PRs across multiple repositories, reviews them with Claude, fixes unresolved review comments, and writes unit tests for approved PRs.
 
 ## How it works
 
 1. Every 30 minutes (during 9:00–19:00 Mon–Fri, local time), the daemon checks all configured repositories
 2. **Reviewer** — finds PRs labeled `ready for review` (without `claude-reviewed`) and posts inline review comments via Claude
 3. **Fixer** — finds PRs with unresolved review comments and applies fixes via Claude in an isolated git worktree
-4. Outside working hours, the daemon sleeps until the next workday morning
+4. **Tester** — finds PRs labeled `Approved` and writes unit tests via Claude, publishing them as a separate PR targeting the original branch
+5. Outside working hours, the daemon sleeps until the next workday morning
 
 ## Prerequisites
 
@@ -44,7 +45,7 @@ Each repo needs:
 - `url` — GitHub repo in `owner/repo` format
 - `path` — absolute path to the local clone
 
-Each repo must have `.claude/commands/pr-review.md` and `.claude/commands/pr-fix.md` prompt files.
+Each repo must have `.claude/commands/pr-review.md`, `.claude/commands/pr-fix.md`, and `.claude/commands/pr-test.md` prompt files.
 
 ### 2. Install dependencies
 
@@ -136,6 +137,7 @@ bun run uninstall:service && bun run install:service
 | `daemon.ts`           | Scheduler — interval timer with working-hours gate   |
 | `reviewer.ts`         | Fetches PRs via `gh`, spawns Claude for review       |
 | `fixer.ts`            | Fetches PRs with comments, applies fixes via Claude  |
+| `tester.ts`           | Fetches approved PRs, writes unit tests via Claude   |
 | `runner.ts`           | Shared utilities — config, git, Claude, GitHub       |
 | `install.ts`          | Registers OS-level autostart service                 |
 | `package.json`        | Dev dependencies and convenience scripts             |
