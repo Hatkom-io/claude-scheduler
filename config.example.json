@@ -2,11 +2,17 @@
   "repos": [
     {
       "url": "owner/repo-name",
-      "path": "/absolute/path/to/repo-name"
+      "path": "/absolute/path/to/repo-name",
+      "prReview": true,
+      "prFix": true,
+      "unitTests": true
     },
     {
       "url": "owner/another-repo",
-      "path": "/absolute/path/to/another-repo"
+      "path": "/absolute/path/to/another-repo",
+      "prReview": true,
+      "prFix": false,
+      "unitTests": false
     }
   ]
 }

@@ -11,6 +11,11 @@ const timeoutMs = 10 * 60 * 1000
 let running = false
 
 const reviewRepo = async (repo: RepoConfig) => {
+  if (repo.prReview === false) {
+    log(`[${repo.url}] Skipping — prReview disabled in config`)
+    return
+  }
+
   let promptTemplate: string
   try {
     promptTemplate = loadPrompt('pr-review.md', repo.path)

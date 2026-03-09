@@ -10,6 +10,11 @@ const timeoutMs = 20 * 60 * 1000
 let running = false
 
 const testRepo = async (repo: RepoConfig) => {
+  if (repo.unitTests === false) {
+    log(`[${repo.url}] Skipping — unitTests disabled in config`)
+    return
+  }
+
   let promptTemplate: string
   try {
     promptTemplate = loadPrompt('pr-test.md', repo.path)

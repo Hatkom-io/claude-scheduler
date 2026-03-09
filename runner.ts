@@ -8,6 +8,9 @@ import { tmpdir } from 'node:os'
 export type RepoConfig = {
   url: string
   path: string
+  prReview?: boolean
+  prFix?: boolean
+  unitTests?: boolean
 }
 
 export type Config = {

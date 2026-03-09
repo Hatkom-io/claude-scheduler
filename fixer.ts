@@ -10,6 +10,11 @@ const timeoutMs = 20 * 60 * 1000
 let running = false
 
 const fixRepo = async (repo: RepoConfig) => {
+  if (repo.prFix === false) {
+    log(`[${repo.url}] Skipping — prFix disabled in config`)
+    return
+  }
+
   let promptTemplate: string
   try {
     promptTemplate = loadPrompt('pr-fix.md', repo.path)
