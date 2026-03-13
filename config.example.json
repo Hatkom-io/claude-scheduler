@@ -1,0 +1,14 @@
+{
+  "repos": [
+    {
+      "url": "owner/repo-name",
+      "path": "/absolute/path/to/repo-name",
+      "stagingBranch": "staging",
+      "stagingLabel": "deploy-to-staging"
+    },
+    {
+      "url": "owner/another-repo",
+      "path": "/absolute/path/to/another-repo"
+    }
+  ]
+}
