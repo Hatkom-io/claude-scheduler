@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runReviewCycle } from './reviewer.ts'
+import { runFixCycle } from './fixer.ts'
+import { runTestCycle } from './tester.ts'
 
 const lockfilePath = resolve(import.meta.dirname, 'daemon.pid')
 
@@ -118,6 +120,18 @@ const scheduleNext = async () => {
       await runReviewCycle()
     } catch (error) {
       log(`Review cycle error: ${(error as Error).message}`)
+    }
+
+    try {
+      await runFixCycle()
+    } catch (error) {
+      log(`Fix cycle error: ${(error as Error).message}`)
+    }
+
+    try {
+      await runTestCycle()
+    } catch (error) {
+      log(`Test cycle error: ${(error as Error).message}`)
     }
   }
 

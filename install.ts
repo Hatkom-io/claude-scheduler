@@ -5,9 +5,9 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { dirname, resolve } from 'node:path'
 
-const daemonPath = resolve(import.meta.dirname, 'daemon.ts')
-const repoRoot = resolve(import.meta.dirname, '..')
-const logDir = resolve(import.meta.dirname, 'logs')
+const schedulerDir = resolve(import.meta.dirname)
+const daemonPath = resolve(schedulerDir, 'daemon.ts')
+const logDir = resolve(schedulerDir, 'logs')
 
 const shouldUninstall = process.argv.includes('--uninstall')
 
@@ -71,7 +71,7 @@ const installLaunchd = () => {
     <string>${daemonPath}</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>${repoRoot}</string>
+  <string>${schedulerDir}</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
@@ -86,9 +86,7 @@ const installLaunchd = () => {
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>${process.env.PATH}</string>${process.env.REVIEW_BOT_REPO_PATH ? `
-    <key>REVIEW_BOT_REPO_PATH</key>
-    <string>${process.env.REVIEW_BOT_REPO_PATH}</string>` : ''}
+    <string>${process.env.PATH}</string>
   </dict>
 </dict>
 </plist>`
@@ -140,10 +138,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=${nodePath} ${daemonPath}
-WorkingDirectory=${repoRoot}
+WorkingDirectory=${schedulerDir}
 Restart=on-failure
 RestartSec=60
-Environment=PATH=${process.env.PATH}${process.env.REVIEW_BOT_REPO_PATH ? `\nEnvironment=REVIEW_BOT_REPO_PATH=${process.env.REVIEW_BOT_REPO_PATH}` : ''}
+Environment=PATH=${process.env.PATH}
 
 [Install]
 WantedBy=default.target`
@@ -172,11 +170,8 @@ const installWindows = () => {
 
   mkdirSync(logDir, { recursive: true })
 
-  const wrapperPath = resolve(import.meta.dirname, 'start-daemon.bat')
-  const envLine = process.env.REVIEW_BOT_REPO_PATH
-    ? `set "REVIEW_BOT_REPO_PATH=${process.env.REVIEW_BOT_REPO_PATH}"\r\n`
-    : ''
-  const bat = `@echo off\r\n${envLine}cd /d "${repoRoot}"\r\n"${nodePath}" "${daemonPath}" >> "${logDir}\\stdout.log" 2>> "${logDir}\\stderr.log"\r\n`
+  const wrapperPath = resolve(schedulerDir, 'start-daemon.bat')
+  const bat = `@echo off\r\ncd /d "${schedulerDir}"\r\n"${nodePath}" "${daemonPath}" >> "${logDir}\\stdout.log" 2>> "${logDir}\\stderr.log"\r\n`
   writeFileSync(wrapperPath, bat)
 
   try {
@@ -195,6 +190,14 @@ const installWindows = () => {
 }
 
 const preflight = () => {
+  if (!existsSync(resolve(schedulerDir, 'config.json'))) {
+    console.error(
+      'Error: config.json not found.\n' +
+      `Copy ${resolve(schedulerDir, 'config.example.json')} to config.json and fill in your repositories.`,
+    )
+    process.exit(1)
+  }
+
   try {
     execSync('gh auth status', { stdio: 'ignore' })
   } catch {
@@ -234,7 +237,7 @@ switch (os) {
   default:
     console.error(`Unsupported platform: ${os}`)
     console.error(
-      'You can run the daemon manually: bun review-bot/daemon.ts',
+      'You can run the daemon manually: bun claude-scheduler/daemon.ts',
     )
     process.exit(1)
 }
